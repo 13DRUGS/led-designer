@@ -1,0 +1,225 @@
+<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><title>LED Designer</title>
+<link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icon-180.png"><meta name="theme-color" content="#070b16"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="LED Designer"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:dark}
+*{box-sizing:border-box}html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;min-height:100%;background:radial-gradient(circle at 50% -10%,#10224f,#070b16 55%);color:#e8eefc;font:14px/1.4 "Segoe UI",Arial,sans-serif}
+button,input{font:inherit;color:#e8eefc}
+button{background:#0d1426;border:1px solid #1e6bff;border-radius:10px;padding:8px 12px;cursor:pointer}
+button:hover,button.on{background:#12306b;box-shadow:0 0 12px #1e6bff}
+input{background:#070b16;border:1px solid #2a4a99;border-radius:8px;padding:7px 9px;width:110px}
+h2,h3{margin:0 0 8px}small,.mut{color:#8fa0c4}
+nav{display:flex;gap:8px;padding:10px;flex-wrap:wrap;align-items:center}nav b{font-size:18px;color:#5aa0ff;text-shadow:0 0 10px #1e6bff;margin-right:8px}
+.card{background:#0d1426;border:1px solid #1e6bff;border-radius:16px;padding:14px;margin:10px;box-shadow:0 0 16px #1e6bff33}
+.bar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:4px 10px}
+.row{display:flex;gap:14px;flex-wrap:wrap;margin:10px 0}
+.car{display:flex;gap:12px;overflow-x:auto;padding:8px 4px}
+.mc{flex:0 0 190px;background:#0a1122;border:1px solid #1e6bff;border-radius:14px;padding:10px;text-align:center;cursor:pointer;display:flex;flex-direction:column;gap:4px;align-items:center}
+.mc.sel{box-shadow:0 0 24px #1e6bff;border-color:#7ab4ff;background:#10224f}
+#cv{height:60vh;margin:6px 10px;border:1px solid #1e6bff;border-radius:14px;overflow:hidden;touch-action:none;background:#070b16}
+.chip{display:inline-block;border:2px solid;border-radius:20px;padding:2px 10px;margin:3px;cursor:pointer;font-size:12px}.chip.on{background:#ffffff22}
+.bad{color:#ff6b7a}.warn{color:#ffc233}.ok{color:#35e08a}
+table{border-collapse:collapse;width:100%}td{border-bottom:1px solid #1d2c55;padding:4px 6px}td.v{white-space:nowrap;font-weight:600}td.n{color:#8fa0c4;font-size:12px}th{text-align:left;color:#5aa0ff;padding:10px 6px 4px}
+#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:#12306b;border:1px solid #5aa0ff;border-radius:12px;padding:10px 16px;opacity:0;pointer-events:none;transition:.3s;max-width:90vw;z-index:9}#toast.on{opacity:1}
+#pr{display:none}
+@page{size:A4 landscape;margin:8mm}
+@media print{body>*{display:none!important}body>#pr{display:block!important;background:#fff;color:#000;print-color-adjust:exact;-webkit-print-color-adjust:exact}.pg{page-break-after:always}.pg svg{width:100%;height:auto}#pr td,#pr th{color:#000;border:1px solid #999}}
+</style></head><body><div id="app"></div><div id="toast"></div><div id="pr"></div>
+<script>
+const M={troika:{n:'Тройка Lightlink',cw:500,ch:1000,pw:128,ph:256,t:'Кейсы',d:'500×1000 мм · 128×256 px'},
+botai:{n:'Botai «Четвёрка»',cw:500,ch:1000,pw:104,ph:208,t:'Кейсы',d:'500×1000 мм · 104×208 px'},
+setka:{n:'Сетка Lightlink',cw:1000,ch:1000,pw:256,ph:128,t:'Телеги',d:'1000×1000 мм · 256×128 px'}};
+const LIM=655360,PC=['#ff4d4d','#3ddc84','#4da3ff','#ffd23f','#ff7ad9','#2ee6d6','#ff9f43','#b388ff','#a3e635','#f472b6','#22d3ee','#fb923c'];
+const $=s=>document.querySelector(s),mk=()=>({model:'troika',w:4,h:4,eth:[],cee:[],ev:-1,cv:-1}),nf=n=>n.toLocaleString('ru-RU');
+let S=(()=>{try{return JSON.parse(localStorage.getItem('ledd'))}catch(e){}})()||{screens:[mk()],built:false};
+let ui={st:'setup',si:0,vw:'both',tab:'eth',act:null,vb:null,dim:[1,1],hl:null},DL=null,VC={};
+try{claude.use('downloads').then(x=>DL=x)}catch(e){}
+const save=()=>{try{localStorage.setItem('ledd',JSON.stringify(S))}catch(e){}},cur=()=>S.screens[ui.si],nm=i=>S.screens.length==1?'Экран':'Экран '+(i+1);
+const geo=s=>{const m=M[s.model],c=Math.max(1,Math.round(s.w*1000/m.cw)),r=Math.max(1,Math.round(s.h*1000/m.ch));return{m,c,r,N:c*r,aw:c*m.cw/1000,ah:r*m.ch/1000,cp:m.pw*m.ph}};
+const adj=(a,b,c)=>Math.abs(((a/c)|0)-((b/c)|0))+Math.abs(a%c-b%c)==1;
+const vs=(s,g,x,t)=>{const row=(x/g.c)|0,col=x%g.c;return row==g.r-1||(t=='cee'&&s.model!='setka'&&(col==0||col==g.c-1))};
+function toast(t){const e=$('#toast');e.textContent=t;e.className='on';clearTimeout(toast.t);toast.t=setTimeout(()=>e.className='',2800)}
+
+/* ---------- ETH: цепочки = вертикальная «змейка» по группам столбцов (чётная группа -> Master и Backup внизу) ---------- */
+function ethVars(s){const g=geo(s),{c,r,cp,N}=g,key='e'+s.model+c+'x'+r;if(VC[key])return VC[key];
+ const mx=Math.floor(Math.floor(LIM/cp)/r);let best=null;
+ if(mx>=1){const n0=Math.max(Math.ceil(N*cp/LIM),Math.ceil(c/mx));
+  for(let n=n0;n<=Math.min(c,n0+2);n++){const lo=Math.max(1,Math.floor(c/n)-1),hi=Math.min(mx,Math.ceil(c/n)+1),L=[],cu=[];
+   (function f(left,j){if(L.length>300)return;const rem=n-j;if(rem==1){if(left>=lo&&left<=hi)L.push(cu.concat(left));return}
+    for(let x=lo;x<=hi;x++){const rest=left-x;if(rest<lo*(rem-1)||rest>hi*(rem-1))continue;cu.push(x);f(rest,j+1);cu.pop()}})(c,0);
+   if(!L.length)continue;const od=a=>a.filter(x=>x%2).length,mo=Math.min(...L.map(od));
+   if(!best||mo<best.mo)best={mo,L:L.filter(a=>od(a)==mo)}}}
+ const out=[],seen=new Set;
+ if(best){const sp=a=>Math.max(...a)-Math.min(...a);best.L.sort((a,b)=>sp(a)-sp(b));
+  for(const comp of best.L.slice(0,30))for(const mir of[0,1]){let c0=0;const ch=[];
+   for(const sz of comp){const cells=[];for(let k=0;k<sz;k++){let col=c0+k;if(mir)col=c-1-col;for(let i=0;i<r;i++)cells.push((k%2==0?r-1-i:i)*c+col)}ch.push({cells});c0+=sz}
+   const id=JSON.stringify(ch);if(!seen.has(id)){seen.add(id);out.push(ch)}}}
+ return VC[key]=out}
+
+/* ---------- CEE: змейки + ДП-разбиение на линии <=10, старт только снизу/сбоку, баланс размеров ---------- */
+function ceeVars(s){const g=geo(s),{c,r,N}=g,key='c'+s.model+c+'x'+r;if(VC[key])return VC[key];
+ const ords=[];
+ for(const mir of[0,1]){const o=[];for(let k=0;k<c;k++){const col=mir?c-1-k:k;for(let i=0;i<r;i++)o.push((k%2==0?r-1-i:i)*c+col)}ords.push(o)}
+ for(const mir of[0,1]){const o=[];for(let k=0;k<r;k++)for(let i=0;i<c;i++)o.push((r-1-k)*c+((k+mir)%2==0?i:c-1-i));ords.push(o)}
+ const res=[];
+ for(const o of ords){let sol=null;
+  for(let K=Math.ceil(N/10);K<=Math.ceil(N/10)+3&&!sol;K++){const INF=1e9,dp=[],bk=[];
+   for(let j=0;j<=K;j++){dp.push(new Array(N+1).fill(INF));bk.push(new Array(N+1).fill(0))}dp[0][0]=0;
+   for(let j=1;j<=K;j++)for(let i=1;i<=N;i++)for(let l=1;l<=10&&l<=i;l++){const p=i-l;if(dp[j-1][p]<INF&&vs(s,g,o[p],'cee')){const v=dp[j-1][p]+l*l;if(v<dp[j][i]){dp[j][i]=v;bk[j][i]=p}}}
+   if(dp[K][N]<INF){const L=[];let i=N;for(let j=K;j>0;j--){const p=bk[j][i];L.unshift({cells:o.slice(p,i)});i=p}sol=L}}
+  if(sol)res.push(sol)}
+ const mn=Math.min(...res.map(x=>x.length)),seen=new Set,out=[];
+ res.filter(x=>x.length==mn).forEach(x=>{const id=JSON.stringify(x);if(!seen.has(id)){seen.add(id);out.push(x)}});
+ return VC[key]=out}
+function nextV(s,t){const v=t=='eth'?ethVars(s):ceeVars(s);if(!v.length){toast('Допустимых вариантов '+t.toUpperCase()+' нет для этого экрана');return false}
+ const k=t=='eth'?'ev':'cv';s[k]=(s[k]+1)%v.length;s[t]=v[s[k]].map(x=>({cells:x.cells.slice()}));ui.act=null;save();return true}
+
+/* ---------- Проверки ---------- */
+function check(s){const g=geo(s),{c,r,N,cp}=g,e=[],w=[],se=new Set,sc=new Set;
+ s.eth.forEach((ch,i)=>{const t='ETH-'+(i+1),a=ch.cells;
+  a.forEach((x,k)=>{if(se.has(x))e.push(t+': кабинет '+(x+1)+' уже в другой цепочке');se.add(x);if(k&&!adj(a[k-1],x,c))e.push(t+': переход '+(a[k-1]+1)+'→'+(x+1)+' через несоседние кабинеты')});
+  if(a.length*cp>LIM)e.push(t+': '+nf(a.length*cp)+' px > '+nf(LIM));
+  if(a.length<2)e.push(t+': Master и Backup в одном кабинете');
+  if(((a[0]/c)|0)!=r-1)e.push(t+': Master не в нижнем ряду');
+  if(((a[a.length-1]/c)|0)!=r-1)w.push(t+': Backup не в нижнем ряду (исключение)')});
+ if(se.size!=N)e.push('ETH: подключено '+se.size+' из '+N+' кабинетов');
+ s.cee.forEach((l,i)=>{const t='CEE-'+(i+1),a=l.cells;
+  a.forEach((x,k)=>{if(sc.has(x))e.push(t+': кабинет '+(x+1)+' уже в другой линии');sc.add(x);if(k&&!adj(a[k-1],x,c))e.push(t+': переход '+(a[k-1]+1)+'→'+(x+1)+' через несоседние кабинеты')});
+  if(a.length>10)e.push(t+': '+a.length+' каб. > 10');if(!vs(s,g,a[0],'cee'))e.push(t+': ввод не снизу/сбоку')});
+ if(sc.size!=N)e.push('CEE: подключено '+sc.size+' из '+N+' кабинетов');
+ if(Math.abs(g.aw-s.w)>1e-6||Math.abs(g.ah-s.h)>1e-6)w.push('Фактический размер '+g.aw+'×'+g.ah+' м отличается от введённого '+s.w+'×'+s.h+' м');
+ return{e,w}}
+
+/* ---------- Ведомость ---------- */
+function bom(s){const g=geo(s),m=g.m,{c,r,N}=g,ch=s.eth.length,cl=s.cee.length,SK=s.model=='setka',R=[],A=(sec,l,v,u,n)=>R.push({sec,l,v,u,n}),
+ ej=s.eth.reduce((a,x)=>a+x.cells.length-1,0),cj=s.cee.reduce((a,x)=>a+x.cells.length-1,0),
+ ext=L=>L.reduce((a,x)=>a+x.cells.slice(1).filter((y,i)=>y!=x.cells[i]-c).length,0),K='Кабинеты',Y='Управление и сигнал',P='Питание',H='Подвес и крепление';
+ A(K,m.n,N,'шт.',m.cw+'×'+m.ch+' мм, '+m.pw+'×'+m.ph+' px');A(K,'Разрешение экрана',null,'',(c*m.pw)+'×'+(r*m.ph)+' px ('+c+'×'+r+' каб.)');A(K,'Всего пикселей',N*g.cp,'px','');
+ A(Y,'Master',ch,'шт.','');A(Y,'Backup',ch,'шт.','');A(Y,'MCTRL4K',Math.ceil(ch/8),'шт.','до 8 Master + 8 Backup');
+ A(Y,'Длинный Ethernet',2*ch,'шт.',ch+' — Master, '+ch+' — Backup');
+ A(Y,SK?'ETH-бочки внешние':'ETH-перемычки',SK?ext(s.eth):ej,'шт.',SK?'встроенные вверх не считаются':'');
+ A(P,'CEE-фазовые кабели',cl,'шт.','по числу линий');A(P,SK?'CEE-бочки внешние':'CEE-перемычки',SK?ext(s.cee):cj,'шт.',SK?'встроенные вверх не считаются':'');
+ let fr,ifc=0,full,pre='';
+ if(s.model=='botai'){fr=Math.ceil(c/2);ifc=2*fr+1;full=ifc*(r-1);if(c%2)pre='нечётное число столбцов — предварительно'}
+ else if(s.model=='troika'){fr=c;ifc=fr+1;full=ifc*(r-1)}else{fr=c;full=(c+1)*(r-1)}
+ const chess=SK?null:Math.ceil(full/2);
+ A(H,'Рамы',fr,'шт.',pre);A(H,'Спансеты',2*fr,'шт.','2 на раму');if(!SK)A(H,'Межрамочные крабы',ifc,'шт.','');
+ A(H,'Межкабинетные крабы (полный)',full,'шт.',SK?'крабы только на углах; предварительно':'');
+ A(H,'Шахматные крабы',chess,'шт.',SK?'не определено — нужна геометрия креплений':'');
+ A(H,'Болты (полный вариант)',4*(ifc+full),'шт.','');A(H,'Болты (шахматный вариант)',chess==null?null:4*(ifc+chess),'шт.','');
+ A('Транспорт',m.t,Math.ceil(N/6),'шт.','6 кабинетов на единицу');return R}
+function bomHTML(){let h='<h2>Ведомость оборудования</h2><p class="mut">Предварительная логическая схема. Нагрузка, сечение кабеля и электробезопасность требуют проверки квалифицированным специалистом.</p>';
+ const tbl=R=>{let o='<table>',sc='';R.forEach(x=>{if(x.sec!=sc){sc=x.sec;o+='<tr><th colspan=3>'+sc+'</th></tr>'}o+='<tr><td>'+x.l+'</td><td class=v>'+(x.v==null?'—':nf(x.v)+' '+x.u)+'</td><td class=n>'+x.n+'</td></tr>'});return o+'</table>'};
+ S.screens.forEach((s,i)=>{h+='<div class=card><h3>'+nm(i)+' — '+M[s.model].n+'</h3>'+tbl(bom(s))+'</div>'});
+ if(S.screens.length>1){const T={};S.screens.forEach(s=>bom(s).forEach(x=>{if(x.v==null)return;const k=x.sec+'|'+x.l+(['Подвес и крепление','Транспорт'].includes(x.sec)?' · '+M[s.model].n:'');T[k]=(T[k]||0)+x.v}));
+  h+='<div class=card><h3>Общая сводка проекта</h3><table>';let sc='';Object.keys(T).forEach(k=>{const[a,b]=k.split('|');if(a!=sc){sc=a;h+='<tr><th colspan=2>'+a+'</th></tr>'}h+='<tr><td>'+b+'</td><td class=v>'+nf(T[k])+'</td></tr>'});h+='</table></div>'}
+ return h}
+
+/* ---------- Схема (SVG) ---------- */
+const lay=s=>{const g=geo(s);return{...g,W:g.m.cw*.09,H:g.m.ch*.09,P:24}};
+function scheme(s,i,vw,ex){const y=lay(s),{c,r,W,H,P,m}=y,gw=c*W,gh=r*H,sE=vw!='cee',sC=vw!='eth',bo=vw=='both';
+ const px=x=>[P+x%c*W,P+((x/c)|0)*H],ct=x=>{const p=px(x);return[p[0]+W/2,p[1]+H/2]};let o='',num='';
+ const col=new Map;if(sE)s.eth.forEach((ch,k)=>ch.cells.forEach(x=>col.set(x,PC[k%PC.length])));
+ for(let x=0;x<c*r;x++){const[a,b]=px(x),hl=!ex&&ui.hl==x;o+='<rect '+(ex?'':'data-i='+x)+' x='+a+' y='+b+' width='+W+' height='+H+' rx=3 fill="'+(col.get(x)||'#0f1b36')+'" fill-opacity='+(col.has(x)?0.18:1)+' stroke="'+(hl?'#fff':'#2a6bff')+'" stroke-width='+(hl?3:1)+' />';
+  num+='<text x='+(a+3)+' y='+(b+10)+' font-size=9 fill="#c9d6f5" stroke="#070b16" stroke-width=2 paint-order=stroke pointer-events=none>'+(x+1)+'</text>'}
+ const arr=(x,yy,an,cl)=>'<path d="M6 0L-4 4.5L-4-4.5Z" transform="translate('+x+' '+yy+') rotate('+an+')" fill="'+cl+'" stroke="#000" stroke-width=.6 pointer-events=none />';
+ const line=(cells,k,dx,dash)=>{const cl=PC[k%PC.length],pts=cells.map(x=>{const p=ct(x);return[p[0]+dx,p[1]]});
+  o+='<polyline points="'+pts.map(p=>p.join(',')).join(' ')+'" fill=none stroke="'+cl+'" stroke-width=2.5 stroke-linejoin=round '+(dash?'stroke-dasharray="6 3"':'')+' pointer-events=none />';
+  for(let j=1;j<pts.length;j++){const[a,b]=pts[j-1],[c2,d]=pts[j];o+=arr((a+c2)/2,(b+d)/2,Math.atan2(d-b,c2-a)*180/Math.PI,cl)}};
+ const lab=(x,yy,t,cl)=>'<rect x='+x+' y='+yy+' width=20 height=11 rx=2 fill="'+cl+'" /><text x='+(x+10)+' y='+(yy+8.5)+' text-anchor=middle font-size=8 font-weight=700 fill="#000">'+t+'</text>';
+ let bd='';const lg=[];
+ if(sE)s.eth.forEach((ch,k)=>{const cl=PC[k%PC.length],a=ch.cells;line(a,k,bo?-W*.2:0,0);const p=px(a[0]),q=px(a[a.length-1]);
+  bd+=lab(p[0]+2,p[1]+H-13,'M'+(k+1),cl)+lab(q[0]+W-22,q[1]+H-13,'B'+(k+1),cl);lg.push([cl,'ETH-'+(k+1)+': M'+(k+1)+'→B'+(k+1)+', '+a.length+' каб., '+nf(a.length*y.cp)+' px',0])});
+ if(sC)s.cee.forEach((l,k)=>{const cl=PC[k%PC.length],a=l.cells,dx=bo?W*.2:0;line(a,k,dx,1);const p=px(a[0]),cc=ct(a[0]);
+  bd+=lab(p[0]+W/2-10,p[1]+H-26,'C'+(k+1),cl);const row=(a[0]/c)|0,cl2=a[0]%c;
+  if(row==r-1)bd+=arr(cc[0]+dx,P+gh+9,-90,cl);else if(cl2==0)bd+=arr(P-9,cc[1],0,cl);else bd+=arr(P+gw+9,cc[1],180,cl);
+  lg.push([cl,'CEE-'+(k+1)+': '+a.length+' каб., вход (пунктир)',1])});
+ const w=Math.max(gw+2*P,540),cW=270,nc=Math.max(1,Math.floor(w/cW)),rows=Math.ceil(lg.length/nc);
+ let lt='';lg.forEach((e,k)=>{const x=P+(k%nc)*cW,yy=P+gh+30+((k/nc)|0)*16;lt+='<rect x='+x+' y='+(yy-8)+' width=18 height=4 fill="'+e[0]+'" /><text x='+(x+24)+' y='+yy+' font-size=10.5 fill="#e8eefc">'+e[2]*0+e[1]+'</text>'});
+ const hh=P+gh+30+rows*16+30;ui.dim=[w,hh];
+ const ttl='<text x='+P+' y=16 font-size=12 fill="#9fc3ff">'+nm(i)+' · '+m.n+' · '+y.aw+'×'+y.ah+' м · '+c+'×'+r+' каб. · '+nf(y.N*y.cp)+' px</text>';
+ const ft='<text x='+P+' y='+(hh-10)+' font-size=9 fill="#8fa0c4">Предварительная логическая схема (расположение IN/OUT не подтверждено). Стрелки — направление; M — Master, B — Backup, C — вход CEE.</text>';
+ const vb=!ex&&ui.vb?ui.vb.join(' '):'0 0 '+w+' '+hh;
+ return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="'+vb+'" '+(ex?'width='+w+' height='+hh:'width="100%" height="100%"')+' style="font-family:Segoe UI,Arial,sans-serif"><rect width='+w+' height='+hh+' fill="#070b16" />'+ttl+o+bd+num+lt+ft+'</svg>'}
+
+/* ---------- Ручное редактирование ---------- */
+function click(i){const s=cur(),g=geo(s),t=ui.tab,L=s[t],used=new Set(L.flatMap(x=>x.cells)),a=ui.act!=null?L[ui.act]:null;
+ if(!a){if(used.has(i))return toast('Кабинет уже в линии — выберите её в списке ниже, чтобы продолжить или удалить');
+  if(!vs(s,g,i,t))return toast(t=='eth'?'Master должен начинаться в нижнем ряду':'CEE-ввод — только снизу или сбоку'+(s.model=='setka'?' (Сетка: только нижний кабинет)':''));
+  L.push({cells:[i]});ui.act=L.length-1}
+ else{const last=a.cells[a.cells.length-1];if(i==last)return;if(used.has(i))return toast('Кабинет уже используется');if(!adj(last,i,g.c))return toast('Можно соединять только соседние кабинеты');
+  if(t=='eth'&&(a.cells.length+1)*g.cp>LIM)return toast('Лимит '+nf(LIM)+' px достигнут — цепочку нельзя продолжать, завершите её');
+  if(t=='cee'&&a.cells.length>=10)return toast('Лимит 10 кабинетов на CEE-линию достигнут');a.cells.push(i)}
+ save();draw()}
+function act(k){const s=cur(),L=s[ui.tab];
+ if(k=='undo'&&ui.act!=null){const a=L[ui.act];a.cells.pop();if(!a.cells.length){L.splice(ui.act,1);ui.act=null}}
+ else if(k=='done')ui.act=null;
+ else if(k=='del'&&ui.act!=null){L.splice(ui.act,1);ui.act=null}
+ else if(k=='clr'){s[ui.tab]=[];ui.act=null}
+ else if(k=='auto'){nextV(s,ui.tab)}
+ save();draw()}
+function zoom(f){const v=ui.vb||[0,0,ui.dim[0],ui.dim[1]],cx=v[0]+v[2]/2,cy=v[1]+v[3]/2;ui.vb=[cx-v[2]*f/2,cy-v[3]*f/2,v[2]*f,v[3]*f];draw()}
+function goto_(n){const s=cur(),y=lay(s),i=n-1;if(!(i>=0&&i<y.N))return toast('Нет кабинета '+n);ui.hl=i;const cx=y.P+i%y.c*y.W+y.W/2,cy=y.P+((i/y.c)|0)*y.H+y.H/2;ui.vb=[cx-y.W*4,cy-y.H*3,y.W*8,y.H*6];draw()}
+
+/* ---------- Экспорт ---------- */
+function canExp(){const er=[];S.screens.forEach((s,i)=>check(s).e.forEach(x=>er.push(nm(i)+': '+x)));
+ if(er.length){alert('Экспорт заблокирован — найдены ошибки:\n'+er.slice(0,12).join('\n')+(er.length>12?'\n… ещё '+(er.length-12):''));return false}return true}
+function dl(b,n){if(!DL){const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=n;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000);return}DL.save({filename:n,data:b}).catch(e=>e&&e.code!='declined'&&toast('Не сохранено: '+(e.message||e.code)))}
+function png(i,v){if(!canExp())return;const s=S.screens[i],str=scheme(s,i,v,1),[w,h]=ui.dim,k=Math.min(2,8000/Math.max(w,h)),im=new Image;
+ im.onload=()=>{const cv=document.createElement('canvas');cv.width=w*k;cv.height=h*k;const x=cv.getContext('2d');x.scale(k,k);x.drawImage(im,0,0,w,h);cv.toBlob(b=>dl(b,nm(i).replace(' ','-')+'-'+v+'.png'))};
+ im.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(str)}
+function pdf(kind){if(!canExp())return;let h='';
+ if(kind=='schemes')S.screens.forEach((s,i)=>['eth','cee','both'].forEach(v=>h+='<div class=pg>'+scheme(s,i,v,1)+'</div>'));else h=bomHTML();
+ $('#pr').innerHTML=h;setTimeout(()=>{window.print();setTimeout(()=>$('#pr').innerHTML='',800)},100)}
+function saveFile(){dl(new Blob([JSON.stringify(S)],{type:'application/json'}),'led-project.json')}
+function openFile(f){const r=new FileReader;r.onload=()=>{try{const d=JSON.parse(r.result);if(!d.screens)throw 0;S=d;ui.si=0;ui.act=null;ui.vb=null;save();draw()}catch(e){toast('Не удалось открыть файл проекта')}};r.readAsText(f)}
+
+/* ---------- Экраны интерфейса ---------- */
+const icon=k=>{const w=k=='setka'?64:34;return'<svg width=70 height=70 viewBox="0 0 70 70"><rect x='+(35-w/2)+' y=3 width='+w+' height=64 rx=4 fill="#10182c" stroke="#5aa0ff" /><rect x='+(35-w/2+4)+' y=10 width='+(w/2-6)+' height=50 fill="#1a2748" /><rect x='+(35+2)+' y=10 width='+(w/2-6)+' height=50 fill="#1a2748" /><rect x=30 y=22 width=10 height=28 rx=2 fill="#5aa0ff" /></svg>'};
+function vSetup(){const s=cur(),g=geo(s),mis=Math.abs(g.aw-s.w)>1e-6||Math.abs(g.ah-s.h)>1e-6;
+ return '<div class=card><h2>Новый проект</h2><label>Сколько LED-экранов в проекте? <input type=number min=1 max=20 value='+S.screens.length+' onchange="setN(this.value)"></label></div>'+
+ '<div class=bar>'+S.screens.map((x,i)=>'<button class="'+(i==ui.si?'on':'')+'" onclick="ui.si='+i+';draw()">'+nm(i)+'</button>').join('')+'</div>'+
+ '<div class=card><h3>'+nm(ui.si)+': модель кабинета</h3><div class=car>'+Object.keys(M).map(k=>'<div class="mc '+(s.model==k?'sel':'')+'" onclick="setM(\''+k+'\')">'+icon(k)+'<b>'+M[k].n+'</b><small>'+M[k].d+'</small></div>').join('')+'</div>'+
+ '<div class=row><label>Ширина, м<br><input type=number step=any min=0.5 value='+s.w+' onchange="setS(\'w\',this.value)"></label><label>Высота, м<br><input type=number step=any min=0.5 value='+s.h+' onchange="setS(\'h\',this.value)"></label></div>'+
+ '<table><tr><td>Кабинетов по горизонтали × вертикали</td><td class=v>'+g.c+' × '+g.r+'</td></tr><tr><td>Всего кабинетов</td><td class=v>'+g.N+'</td></tr><tr><td>Фактический размер</td><td class=v>'+g.aw+' × '+g.ah+' м</td></tr><tr><td>Итоговое разрешение</td><td class=v>'+(g.c*g.m.pw)+' × '+(g.r*g.m.ph)+' px</td></tr><tr><td>Всего пикселей</td><td class=v>'+nf(g.N*g.cp)+'</td></tr></table>'+
+ (mis?'<p class=warn>Введено '+s.w+'×'+s.h+' м, из целых кабинетов получится '+g.aw+'×'+g.ah+' м. <button onclick="setS(\'w\','+g.aw+');setS(\'h\','+g.ah+')">Принять фактический размер</button></p>':'')+'</div>'+
+ '<div class=bar><button class=on style="font-size:16px;padding:12px 20px" onclick="build()">Собрать проект</button>'+(S.built?'<button onclick="ui.st=\'design\';draw()">К схемам</button>':'')+'</div>'}
+function vDesign(){const s=cur(),g=geo(s),ck=check(s),t=ui.tab,L=s[t],vc=(t=='eth'?ethVars(s):ceeVars(s)).length,k=t=='eth'?s.ev:s.cv;
+ const b=(c,f,tx)=>'<button class="'+c+'" onclick="'+f+'">'+tx+'</button>';
+ return '<div class=bar>'+S.screens.map((x,i)=>b(i==ui.si?'on':'','ui.si='+i+';ui.act=null;ui.vb=null;ui.hl=null;draw()',nm(i))).join('')+'</div>'+
+ '<div class=bar><span class=mut>Правка:</span>'+b(t=='eth'?'on':'',"ui.tab='eth';ui.act=null;draw()",'ETH')+b(t=='cee'?'on':'',"ui.tab='cee';ui.act=null;draw()",'CEE')+
+ '<span class=mut>Показать:</span>'+[['eth','ETH'],['cee','CEE'],['both','ETH+CEE']].map(x=>b(ui.vw==x[0]?'on':'',"ui.vw='"+x[0]+"';draw()",x[1])).join('')+'</div>'+
+ '<div class=bar>'+b('on',"act('auto')",'Следующий вариант '+t.toUpperCase()+' ('+(k+1)+'/'+vc+')')+b('',"act('undo')",'↶ Отмена шага')+b('',"act('done')",'Завершить')+b('',"act('del')",'Удалить линию')+b('',"act('clr')",'Очистить '+t.toUpperCase())+
+ b('',"zoom(.75)",'+')+b('',"zoom(1.33)",'−')+b('',"ui.vb=null;draw()",'Вся схема')+'<input type=number placeholder="№ каб." style="width:80px" onchange="goto_(+this.value)"></div>'+
+ '<div id=cv>'+scheme(s,ui.si,ui.vw,0)+'</div>'+
+ '<div class=card><b>'+(t=='eth'?'ETH-цепочки':'CEE-линии')+'</b> <small class=mut>— нажимайте кабинеты по порядку (только соседние); выбрать линию для продолжения/удаления — по метке:</small><br>'+
+ L.map((x,i)=>'<span class="chip '+(ui.act==i?'on':'')+'" style="border-color:'+PC[i%12]+'" onclick="ui.act='+i+';draw()">'+t.toUpperCase()+'-'+(i+1)+' · '+x.cells.length+' каб.'+(t=='eth'?' · '+nf(x.cells.length*g.cp)+' px':'')+'</span>').join('')+(L.length?'':'<span class=mut> пока пусто</span>')+
+ '<div style="margin-top:8px">'+(t=='eth'?'Master: '+s.eth.length+' · MCTRL4K: '+Math.ceil(s.eth.length/8):'Линий: '+s.cee.length)+'</div></div>'+
+ '<div class=card><b>Проверка схемы</b>'+(ck.e.length||ck.w.length?'':'<div class=ok>✓ Ошибок нет</div>')+ck.e.slice(0,10).map(x=>'<div class=bad>✗ '+x+'</div>').join('')+ck.w.map(x=>'<div class=warn>⚠ '+x+'</div>').join('')+
+ '<div class="mut" style="margin-top:6px;font-size:12px">Лимиты 655 360 px/ETH и 10 каб./CEE — рабочие ограничения приложения; нагрузку, сечение кабеля и защиту проверяет квалифицированный специалист.</div></div>'}
+function vBom(){let ex='<div class=card><b>Экспорт</b><div class=bar>'+S.screens.map((s,i)=>['eth','cee','both'].map(v=>'<button onclick="png('+i+',\''+v+'\')">PNG '+nm(i)+' '+v.toUpperCase().replace('BOTH','ETH+CEE')+'</button>').join('')).join('')+
+ '<button onclick="pdf(\'schemes\')">PDF: схемы</button><button onclick="pdf(\'bom\')">PDF: ведомость</button><button onclick="saveFile()">Сохранить проект (JSON)</button><label><input type=file accept=".json" style="display:none" onchange="openFile(this.files[0])"><span class=mut style="cursor:pointer;border:1px solid #1e6bff;border-radius:10px;padding:8px 12px;display:inline-block">Открыть проект</span></label></div><small class=mut>PDF — через диалог печати («Сохранить как PDF», альбомная ориентация). Экспорт блокируется при ошибках в схемах.</small></div>';
+ return ex+bomHTML()}
+function draw(){const nav='<nav><b>LED DESIGNER</b>'+[['setup','Настройка'],['design','Схемы'],['bom','Ведомость и экспорт']].map(x=>'<button class="'+(ui.st==x[0]?'on':'')+'" onclick="go(\''+x[0]+'\')">'+x[1]+'</button>').join('')+'<button onclick="if(confirm(\'Начать новый проект?\')){S={screens:[mk()],built:false};ui={...ui,st:\'setup\',si:0,act:null,vb:null};save();draw()}">Новый</button></nav>';
+ $('#app').innerHTML=nav+(ui.st=='setup'?vSetup():ui.st=='design'?vDesign():vBom());if(ui.st=='design')bind()}
+function go(st){if(st!='setup'&&!S.built)return toast('Сначала нажмите «Собрать проект»');ui.st=st;ui.vb=null;draw()}
+function setN(v){v=Math.max(1,Math.min(20,+v||1));while(S.screens.length<v)S.screens.push(mk());S.screens.length=v;ui.si=Math.min(ui.si,v-1);S.built=false;save();draw()}
+function setM(k){const s=cur();s.model=k;s.eth=[];s.cee=[];s.ev=s.cv=-1;S.built=false;save();draw()}
+function setS(k,v){const s=cur();s[k]=Math.max(.5,+v||1);s.eth=[];s.cee=[];s.ev=s.cv=-1;S.built=false;save();draw()}
+function build(){let bad=0;S.screens.forEach(s=>{s.ev=s.cv=-1;if(!nextV(s,'eth'))bad++;if(!nextV(s,'cee'))bad++});S.built=true;ui.st='design';ui.si=0;ui.vb=null;ui.hl=null;save();draw();if(bad)toast('Для части экранов нет допустимых вариантов — см. проверку')}
+function bind(){const el=$('#cv'),sv=el.querySelector('svg'),P=new Map;let mv=0,d0=0;
+ const pt=(x,y)=>{const p=sv.createSVGPoint();p.x=x;p.y=y;return p.matrixTransform(sv.getScreenCTM().inverse())},
+ vb=()=>ui.vb||(ui.vb=[0,0,ui.dim[0],ui.dim[1]]),set=()=>sv.setAttribute('viewBox',ui.vb.join(' ')),
+ zm=(f,x,y)=>{const v=vb(),p=pt(x,y);ui.vb=[p.x-(p.x-v[0])*f,p.y-(p.y-v[1])*f,v[2]*f,v[3]*f];set()},
+ ds=()=>{const a=[...P.values()];return Math.hypot(a[0][0]-a[1][0],a[0][1]-a[1][1])||1};
+ el.onwheel=e=>{e.preventDefault();zm(e.deltaY>0?1.15:.87,e.clientX,e.clientY)};
+ el.onpointerdown=e=>{P.set(e.pointerId,[e.clientX,e.clientY]);if(P.size==1)mv=0;if(P.size==2)d0=ds();try{el.setPointerCapture(e.pointerId)}catch(_){}};
+ el.onpointermove=e=>{const o=P.get(e.pointerId);if(!o)return;P.set(e.pointerId,[e.clientX,e.clientY]);
+  if(P.size==1){const dx=e.clientX-o[0],dy=e.clientY-o[1],v=vb(),k=Math.max(v[2]/el.clientWidth,v[3]/el.clientHeight);mv+=Math.abs(dx)+Math.abs(dy);ui.vb=[v[0]-dx*k,v[1]-dy*k,v[2],v[3]];set()}
+  else if(P.size==2){const d=ds(),a=[...P.values()];zm(d0/d,(a[0][0]+a[1][0])/2,(a[0][1]+a[1][1])/2);d0=d;mv=99}};
+ el.onpointerup=el.onpointercancel=e=>{const one=P.size==1;P.delete(e.pointerId);
+  if(one&&mv<6&&e.type=='pointerup'){const t=document.elementFromPoint(e.clientX,e.clientY),r=t&&t.closest('[data-i]');if(r)click(+r.dataset.i)}}}
+draw();
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script></body></html>
